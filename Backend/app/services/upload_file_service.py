@@ -2,7 +2,7 @@ import os
 from werkzeug.utils import secure_filename
 
 class FileService:
-    ALLOWED_EXTENSIONS = {'pdf', 'docx'}
+    ALLOWED_EXTENSIONS = {'pdf'}
 
     def __init__(self, upload_folder):
         self.upload_folder = upload_folder

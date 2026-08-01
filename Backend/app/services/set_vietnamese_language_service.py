@@ -45,8 +45,7 @@ class SetVietnameseService:
         # Set the language attributes
         lang.set(qn('w:val'), lang_code)         # For normal text
         lang.set(qn('w:eastAsia'), lang_code)    # For East Asian text
-        lang.set(qn('w:bidi'), 'ar-SA')          # For bidirectional text (set as needed)
+        lang.attrib.pop(qn('w:bidi'), None)
 
         # Save the modified document
         doc.save(doc_path)
-        print(f"The language has been set to Vietnamese for the document: {doc_path}")

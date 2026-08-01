@@ -6,6 +6,11 @@ import fitz
 from PIL import Image as PILImage
 from docx.image.exceptions import UnrecognizedImageError
 
+
+class PdfHasNoTextLayerError(ValueError):
+    """Raised when a PDF does not contain enough extractable text."""
+
+
 class ConvertPdfToWordService:
     def __init__(self):
         pass
@@ -13,6 +18,15 @@ class ConvertPdfToWordService:
     def convert_pdf_to_word(self, pdf_path, word_path):
         # Open the PDF file
         pdf_file = fitz.open(pdf_path)
+
+        extracted_text = "".join(page.get_text("text").strip() for page in pdf_file)
+        minimum_text_length = max(50, len(pdf_file) * 20)
+        if len(extracted_text) < minimum_text_length:
+            pdf_file.close()
+            raise PdfHasNoTextLayerError(
+                "PDF không có đủ lớp văn bản để xử lý. "
+                "Công cụ hiện chưa hỗ trợ PDF scan hoặc PDF chủ yếu chứa hình ảnh."
+            )
 
         # Create the output directory for images
         os.makedirs("images", exist_ok=True)
@@ -79,4 +93,3 @@ class ConvertPdfToWordService:
         # Save the DOCX file
         doc.save(word_path)
         pdf_file.close()
-        print(f"Extraction completed. Text and images saved to {word_path}")
