@@ -3,6 +3,8 @@ import re
 from docx import Document
 from docx.shared import Inches
 import fitz
+from PIL import Image as PILImage
+from docx.image.exceptions import UnrecognizedImageError
 
 class ConvertPdfToWordService:
     def __init__(self):
@@ -42,7 +44,18 @@ class ConvertPdfToWordService:
                         image_file.write(image_bytes)
 
                     # Add the image to the DOCX file
-                    doc.add_picture(image_name, width=Inches(4))
+                    try:
+                        with PILImage.open(image_name) as img:
+
+                            temp_img_path = image_name + "_fixed.png"
+                            img.convert("RGB").save(temp_img_path, format="PNG")
+                            doc.add_picture(temp_img_path, width=Inches(4))
+
+                            if os.path.exists(temp_img_path):
+                                os.remove(temp_img_path)
+
+                    except (UnrecognizedImageError, Exception) as e:
+                        print(f"[Warning] Bỏ qua ảnh không hợp lệ '{image_name}': {e}")
 
             # Extract text from the page
             page_text = page.get_text("dict")
