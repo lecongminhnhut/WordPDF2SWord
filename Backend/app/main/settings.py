@@ -1,15 +1,23 @@
 # -*- coding: utf-8 -*-
 import os
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+
+BACKEND_DIR = Path(__file__).resolve().parents[2]
+load_dotenv(BACKEND_DIR / '.env', override=False)
 
 
 class Config:
 
     # project root directory
-    BASE_DIR = os.path.join(os.pardir, os.path.dirname(__file__))
+    BASE_DIR = str(BACKEND_DIR)
     SECRET_KEY = os.environ.get("SECRET_KEY")
     GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
-    GEMINI_MODEL_NAME = 'gemini-1.5-flash'
-    CHROMA_DB_PATH = 'app/database/'
+    GEMINI_MODEL_NAME = os.environ.get("GEMINI_MODEL_NAME") or 'gemini-1.5-flash'
+    GEMINI_REQUEST_TIMEOUT = int(os.environ.get("GEMINI_REQUEST_TIMEOUT") or '120')
+    CHROMA_DB_PATH = str(BACKEND_DIR / 'app' / 'database')
 
     # Flask Configuration
     # --------------------------------------------------------------------
