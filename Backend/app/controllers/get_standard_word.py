@@ -1,5 +1,6 @@
 from flask_restful import Resource, reqparse
 from app.services.get_standard_word_service import GetStandardWordService
+from app.services.convert_pdf_to_word_service import PdfHasNoTextLayerError
 
 GET_STANDARD_WORD_ROUTE = '/get-standard-word'
 
@@ -11,11 +12,15 @@ class GetStandardWord(Resource):
         self.service = GetStandardWordService()
 
     def post(self):
-        args = self.parser.parse_args()
-        user_id = args['user_id']
-        file_path = args['file_path'] # already contain user_id inside the path
+        try:
+            args = self.parser.parse_args()
+            user_id = args['user_id']
+            file_path = args['file_path'] # already contain user_id inside the path
 
-        print(f"User ID: {user_id}")
-        print(len(file_path), file_path)
-
-        return self.service.get_result(file_path)
+            return self.service.get_result(file_path)
+        except PdfHasNoTextLayerError as exc:
+            return {'message': str(exc)}, 422
+        except TimeoutError as exc:
+            return {'message': str(exc)}, 504
+        except Exception as exc:
+            return {'message': f'Không thể xử lý tài liệu: {exc}'}, 500
