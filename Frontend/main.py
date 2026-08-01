@@ -5,6 +5,8 @@ import requests  # Import requests for API calls
 BACK_END_URL = "http://localhost:5000" #"https://badger-prepared-iguana.ngrok-free.app"
 REGISTER_USER_API_URL = "/register-user"
 DELETE_USER_DATA_API_URL = "/delete-user"
+CONNECT_TIMEOUT_SECONDS = 10
+REGISTER_TIMEOUT_SECONDS = 30
 
 st.set_page_config(page_title="WordPdf2Sword", page_icon=":material/edit:")
 
@@ -14,11 +16,16 @@ if "back_end_url" not in st.session_state:
 # Call backend API to register user and store the ID
 if "session_state_id_turn" not in st.session_state:
     try:
-        response = requests.post(st.session_state.back_end_url + REGISTER_USER_API_URL)
+        response = requests.post(
+            st.session_state.back_end_url + REGISTER_USER_API_URL,
+            timeout=(CONNECT_TIMEOUT_SECONDS, REGISTER_TIMEOUT_SECONDS)
+        )
         if response.status_code == 201:
             st.session_state.session_state_id_turn = response.json().get("user_id")
         else:
             st.error(f"Error registering user: {response.json().get('message')}")
+    except requests.exceptions.Timeout:
+        st.error("Registering the session timed out. Please restart the app.")
     except requests.exceptions.RequestException as e:
         st.error(f"Error connecting to the server: {e}")
 
