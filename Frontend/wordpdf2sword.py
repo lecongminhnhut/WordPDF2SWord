@@ -60,15 +60,10 @@ st.warning(
     "phức tạp hoặc hình ảnh mang nội dung thiết yếu."
 )
 
-limitations_confirmed = st.checkbox(
-    "Tôi xác nhận tài liệu đáp ứng các giới hạn xử lý ở trên."
-)
-
 uploaded_files = st.file_uploader(
     label="Upload Files:",
     type=["pdf"],
-    accept_multiple_files=True,
-    disabled=not limitations_confirmed
+    accept_multiple_files=True
 )
 
 uploaded_paths = []
@@ -165,7 +160,7 @@ if uploaded_files:
         if uploaded_path:
             uploaded_paths.append(uploaded_path)
 
-if st.button("Get Standard Word", disabled=not limitations_confirmed):
+if st.button("Get Standard Word"):
     if not uploaded_paths:
         st.warning("Vui lòng upload ít nhất một file PDF.")
         st.stop()
