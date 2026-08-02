@@ -54,11 +54,6 @@ with col2:
     st.title("PDF To Standard Word")
 
 st.info("Tải lên file PDF cần chuyển thành Standard Word.")
-st.warning(
-    "Phiên bản hiện tại chỉ hỗ trợ PDF có lớp văn bản, bố cục một cột, "
-    "chủ yếu bằng tiếng Việt và không có bảng, công thức, footnote/endnote "
-    "phức tạp hoặc hình ảnh mang nội dung thiết yếu."
-)
 
 STATE_DEFAULTS = {
     "operation_in_progress": False,
@@ -91,7 +86,7 @@ def request_processing():
 
 is_busy = st.session_state.operation_in_progress
 uploaded_files = st.file_uploader(
-    label="Upload Files:",
+    label="Upload Files (multiple files supported):",
     type=["pdf"],
     accept_multiple_files=True,
     key="uploaded_pdf_files",
