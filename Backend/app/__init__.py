@@ -10,6 +10,11 @@ from app.main.logging import LOGGING_CONFIG
 app = Flask(__name__)
 app.config.from_object(main.settings[os.environ.get('APPLICATION_ENV', 'default')])
 
+
+@app.get('/health')
+def health():
+    return {'status': 'ok'}, 200
+
 # Logs Initialization
 console = logging.getLogger('console')
 
