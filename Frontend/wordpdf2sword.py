@@ -30,6 +30,9 @@ background-repeat: no-repeat;
 [data-testid="stHeader"] {{
 background: rgba(0, 0, 0, 0);
 }}
+[data-testid="stStatusWidget"] {{
+display: none;
+}}
 [data-testid="stMainBlockContainer"]{{
 border: 15px solid white;
 border-radius: 20px;
@@ -155,25 +158,70 @@ def fetch_file_from_backend(file_path):
 
 
 if uploaded_files:
-    for uploaded_file in uploaded_files:
-        uploaded_path = upload_file_to_backend(uploaded_file)
-        if uploaded_path:
-            uploaded_paths.append(uploaded_path)
+    with st.status(
+        f"Đang tải {len(uploaded_files)} file PDF lên máy chủ...",
+        expanded=True
+    ) as upload_status:
+        for uploaded_file in uploaded_files:
+            st.write(f"Đang tải: {uploaded_file.name}")
+            uploaded_path = upload_file_to_backend(uploaded_file)
+            if uploaded_path:
+                uploaded_paths.append(uploaded_path)
+
+        uploaded_count = len(uploaded_paths)
+        if uploaded_count == len(uploaded_files):
+            upload_status.update(
+                label=f"Đã tải lên {uploaded_count} file PDF.",
+                state="complete",
+                expanded=False
+            )
+        else:
+            upload_status.update(
+                label=(
+                    f"Chỉ tải lên thành công {uploaded_count}/"
+                    f"{len(uploaded_files)} file PDF."
+                ),
+                state="error",
+                expanded=True
+            )
 
 if st.button("Get Standard Word"):
     if not uploaded_paths:
         st.warning("Vui lòng upload ít nhất một file PDF.")
         st.stop()
 
-    for path in uploaded_paths:
-        processed_path = get_processed_file_path(path)
-        if processed_path:
-            processed_paths.append(processed_path)
+    with st.status(
+        f"Đang xử lý {len(uploaded_paths)} tài liệu...",
+        expanded=True
+    ) as process_status:
+        for path in uploaded_paths:
+            st.write(f"Đang phân tích: {os.path.basename(path)}")
+            processed_path = get_processed_file_path(path)
+            if processed_path:
+                processed_paths.append(processed_path)
 
-    for path in processed_paths:
-        fetched_file = fetch_file_from_backend(path)
-        if fetched_file:
-            fetched_files.append((fetched_file, os.path.basename(path)))
+        for path in processed_paths:
+            st.write(f"Đang tải kết quả: {os.path.basename(path)}")
+            fetched_file = fetch_file_from_backend(path)
+            if fetched_file:
+                fetched_files.append((fetched_file, os.path.basename(path)))
+
+        completed_count = len(fetched_files)
+        if completed_count == len(uploaded_paths):
+            process_status.update(
+                label=f"Đã xử lý xong {completed_count} tài liệu.",
+                state="complete",
+                expanded=False
+            )
+        else:
+            process_status.update(
+                label=(
+                    f"Chỉ xử lý thành công {completed_count}/"
+                    f"{len(uploaded_paths)} tài liệu."
+                ),
+                state="error",
+                expanded=True
+            )
 
 if fetched_files:
     st.write("Processed Files:")

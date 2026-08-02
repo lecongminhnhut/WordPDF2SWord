@@ -4,12 +4,14 @@ from docx.shared import Inches
 import os
 import re
 from app.services.convert_pdf_to_word_service import ConvertPdfToWordService
+from app.services.delete_footnote_service import DeleteFootnoteService
 from app.services.detect_heading_service import DetectHeadingService
 from app.services.set_vietnamese_language_service import SetVietnameseService
 
 class PdfToStandardWordService:
     def __init__(self):
         self.convert_pdf_to_word_service = ConvertPdfToWordService()
+        self.delete_footnote_service = DeleteFootnoteService()
         self.detect_heading_service = DetectHeadingService()
         self.set_vietnamese_service = SetVietnameseService()
 
@@ -21,6 +23,9 @@ class PdfToStandardWordService:
     
         # Convert the PDF file to a DOCX file
         self.convert_pdf_to_word_service.convert_pdf_to_word(pdf_path, word_path)
+
+        # Remove only high-confidence rendered footnote/endnote blocks
+        self.delete_footnote_service.remove_footnotes_precisely(word_path)
 
         # Detect headings in the DOCX file
         self.detect_heading_service.detect_heading(word_path)
