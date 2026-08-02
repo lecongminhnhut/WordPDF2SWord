@@ -1,11 +1,8 @@
-import json
 import os
-from pathlib import Path
 
 import streamlit as st
 import requests  # Import requests for API calls
 
-FRONTEND_DIR = Path(__file__).resolve().parent
 BACK_END_URL = os.getenv("BACK_END_URL", "http://localhost:5000").rstrip("/")
 REGISTER_USER_API_URL = "/register-user"
 DELETE_USER_DATA_API_URL = "/delete-user"
@@ -39,17 +36,6 @@ if "session_state_id_turn" not in st.session_state:
         st.error(f"Error connecting to the server: {e}")
         if st.button("Kết nối lại backend"):
             st.rerun()
-
-@st.cache_resource
-def get_img():
-    print("Loading images...")
-    with open(FRONTEND_DIR / "assets" / "img_map.json", "r", encoding="utf-8") as f:
-        index = json.load(f)
-    return index
-
-index = get_img()
-
-st.session_state.index = index
 
 sidebar_pg = f"""
 <style>
