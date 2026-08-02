@@ -35,11 +35,13 @@ border: 15px solid white;
 border-radius: 20px;
 padding: 5px;
 background-color: white;
+color: #1F2937;
 margin: 20px 0px;
 }}
 [data-testid="stSidebarCollapsedControl"] {{
 border-radius: 5px;
 background-color: white;
+color: #1F2937;
 }}
 </style>
 """

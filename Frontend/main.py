@@ -57,6 +57,7 @@ sidebar_pg = f"""
 border-radius: 20px;
 padding: 10px 0px;
 background-color: white;
+color: #1F2937;
 margin: 10px;
 }}
 [data-testid="stSidebarNavSeparator"] {{
@@ -67,11 +68,13 @@ margin: 0px 10px;
 border-radius: 20px;
 padding: 10px;
 background-color: white;
+color: #1F2937;
 margin: 5px;
 }}
 [data-testid="stSidebarCollapseButton"] {{
 border-radius: 5px;
 background-color: white;
+color: #1F2937;
 }}
 </style>
 """
