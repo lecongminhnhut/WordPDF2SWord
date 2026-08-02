@@ -1,10 +1,12 @@
 import os
 from io import BytesIO
+from pathlib import Path
 from urllib.parse import unquote
 
 import requests
 import streamlit as st
 
+FRONTEND_DIR = Path(__file__).resolve().parent
 
 # Backend API endpoints
 UPLOAD_FILE_API_URL = "/upload-file"
@@ -45,7 +47,7 @@ st.markdown(page_bg_img, unsafe_allow_html=True)
 
 col1, col2 = st.columns([1, 3])
 with col1:
-    st.image('./assets/app_logo3.png', width=200)
+    st.image(FRONTEND_DIR / "assets" / "app_logo3.png", width=200)
 with col2:
     st.title("PDF To Standard Word")
 

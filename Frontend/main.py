@@ -1,8 +1,12 @@
 import json
+import os
+from pathlib import Path
+
 import streamlit as st
 import requests  # Import requests for API calls
 
-BACK_END_URL = "http://localhost:5000" #"https://badger-prepared-iguana.ngrok-free.app"
+FRONTEND_DIR = Path(__file__).resolve().parent
+BACK_END_URL = os.getenv("BACK_END_URL", "http://localhost:5000").rstrip("/")
 REGISTER_USER_API_URL = "/register-user"
 DELETE_USER_DATA_API_URL = "/delete-user"
 CONNECT_TIMEOUT_SECONDS = 10
@@ -39,7 +43,7 @@ if "session_state_id_turn" not in st.session_state:
 @st.cache_resource
 def get_img():
     print("Loading images...")
-    with open('./assets/img_map.json', 'r') as f:
+    with open(FRONTEND_DIR / "assets" / "img_map.json", "r", encoding="utf-8") as f:
         index = json.load(f)
     return index
 
