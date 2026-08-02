@@ -6,7 +6,7 @@ BACK_END_URL = "http://localhost:5000" #"https://badger-prepared-iguana.ngrok-fr
 REGISTER_USER_API_URL = "/register-user"
 DELETE_USER_DATA_API_URL = "/delete-user"
 CONNECT_TIMEOUT_SECONDS = 10
-REGISTER_TIMEOUT_SECONDS = 30
+REGISTER_TIMEOUT_SECONDS = 90
 
 st.set_page_config(page_title="WordPdf2Sword", page_icon=":material/edit:")
 
@@ -25,9 +25,16 @@ if "session_state_id_turn" not in st.session_state:
         else:
             st.error(f"Error registering user: {response.json().get('message')}")
     except requests.exceptions.Timeout:
-        st.error("Registering the session timed out. Please restart the app.")
+        st.error(
+            "Backend mất quá nhiều thời gian để khởi động. "
+            "Render Free có thể cần khoảng một phút để thức dậy."
+        )
+        if st.button("Kết nối lại backend"):
+            st.rerun()
     except requests.exceptions.RequestException as e:
         st.error(f"Error connecting to the server: {e}")
+        if st.button("Kết nối lại backend"):
+            st.rerun()
 
 @st.cache_resource
 def get_img():
