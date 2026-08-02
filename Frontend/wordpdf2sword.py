@@ -2,6 +2,7 @@ import os
 from io import BytesIO
 from pathlib import Path
 from urllib.parse import unquote
+from zipfile import ZIP_DEFLATED, ZipFile
 
 import requests
 import streamlit as st
@@ -198,6 +199,31 @@ def fetch_file_from_backend(file_path):
     return None
 
 
+def build_zip_archive(files):
+    zip_buffer = BytesIO()
+    used_filenames = set()
+
+    with ZipFile(zip_buffer, "w", compression=ZIP_DEFLATED) as zip_file:
+        for index, (file_data, filename) in enumerate(files, 1):
+            safe_filename = os.path.basename(filename).strip()
+            if not safe_filename:
+                safe_filename = f"standard_word_{index}.docx"
+
+            stem, extension = os.path.splitext(safe_filename)
+            extension = extension or ".docx"
+            unique_filename = f"{stem}{extension}"
+            duplicate_number = 2
+
+            while unique_filename.casefold() in used_filenames:
+                unique_filename = f"{stem}_{duplicate_number}{extension}"
+                duplicate_number += 1
+
+            used_filenames.add(unique_filename.casefold())
+            zip_file.writestr(unique_filename, file_data)
+
+    return zip_buffer.getvalue()
+
+
 if st.session_state.upload_requested:
     files_to_upload = list(uploaded_files or [])
     uploaded_paths = []
@@ -301,6 +327,15 @@ if st.session_state.process_requested:
 
 if st.session_state.processed_files:
     st.write("Processed Files:")
+    zip_data = build_zip_archive(st.session_state.processed_files)
+    st.download_button(
+        label="Download All (.zip)",
+        data=zip_data,
+        file_name="standard_word_files.zip",
+        mime="application/zip",
+        disabled=st.session_state.operation_in_progress,
+    )
+
     for i, (file_data, filename) in enumerate(
         st.session_state.processed_files,
         1,
