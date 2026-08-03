@@ -16,7 +16,7 @@ class Config:
     SECRET_KEY = os.environ.get("SECRET_KEY")
     GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
     GEMINI_MODEL_NAME = os.environ.get("GEMINI_MODEL_NAME") or 'gemini-1.5-flash'
-    GEMINI_REQUEST_TIMEOUT = int(os.environ.get("GEMINI_REQUEST_TIMEOUT") or '120')
+    GEMINI_REQUEST_TIMEOUT = int(os.environ.get("GEMINI_REQUEST_TIMEOUT") or '300')
     CHROMA_DB_PATH = str(BACKEND_DIR / 'app' / 'database')
 
     # Flask Configuration

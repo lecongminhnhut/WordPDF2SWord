@@ -15,9 +15,9 @@ GET_STANDARD_WORD_API_URL = "/get-standard-word"
 GET_FILE_API_URL = "/get-file"
 
 CONNECT_TIMEOUT_SECONDS = 10
-UPLOAD_TIMEOUT_SECONDS = 120
-PROCESS_TIMEOUT_SECONDS = 180
-DOWNLOAD_TIMEOUT_SECONDS = 60
+UPLOAD_TIMEOUT_SECONDS = 300
+PROCESS_TIMEOUT_SECONDS = 600
+DOWNLOAD_TIMEOUT_SECONDS = 180
 
 page_bg_img = f"""
 <style>
@@ -62,6 +62,7 @@ STATE_DEFAULTS = {
     "uploaded_paths": [],
     "processed_files": [],
     "operation_message": None,
+    "operation_errors": [],
 }
 for state_key, default_value in STATE_DEFAULTS.items():
     if state_key not in st.session_state:
@@ -75,6 +76,7 @@ def request_upload():
     st.session_state.uploaded_paths = []
     st.session_state.processed_files = []
     st.session_state.operation_message = None
+    st.session_state.operation_errors = []
 
 
 def request_processing():
@@ -82,6 +84,7 @@ def request_processing():
     st.session_state.process_requested = True
     st.session_state.processed_files = []
     st.session_state.operation_message = None
+    st.session_state.operation_errors = []
 
 
 is_busy = st.session_state.operation_in_progress
@@ -110,6 +113,48 @@ if operation_message:
     else:
         st.warning(message_text)
 
+if st.session_state.operation_errors:
+    st.error(
+        f"Có {len(st.session_state.operation_errors)} lỗi. "
+        "Mở từng mục bên dưới để xem chi tiết debug."
+    )
+    for error in st.session_state.operation_errors:
+        filename = error["filename"]
+        stage = error["stage"]
+        with st.expander(f"❌ {filename} — {stage}", expanded=True):
+            if error.get("status_code") is not None:
+                st.write(f"HTTP status: {error['status_code']}")
+            st.code(error["message"], language=None)
+
+
+def get_response_error(response):
+    try:
+        payload = response.json()
+        if isinstance(payload, dict) and payload.get("message"):
+            return str(payload["message"])
+        if payload:
+            return str(payload)
+    except (ValueError, requests.exceptions.JSONDecodeError):
+        pass
+
+    return response.text.strip() or "Backend không trả về nội dung lỗi."
+
+
+def create_error(filename, stage, message, status_code=None):
+    return {
+        "filename": os.path.basename(filename) or filename,
+        "stage": stage,
+        "status_code": status_code,
+        "message": str(message),
+    }
+
+
+def show_current_error(error):
+    message = " ".join(error["message"].split())
+    if len(message) > 240:
+        message = f"{message[:237]}..."
+    st.write(f"❌ {error['filename']} — {error['stage']}: {message}")
+
 
 def upload_file_to_backend(uploaded_file):
     try:
@@ -128,19 +173,44 @@ def upload_file_to_backend(uploaded_file):
             timeout=(CONNECT_TIMEOUT_SECONDS, UPLOAD_TIMEOUT_SECONDS)
         )
         if response.status_code == 201:
-            return response.json().get("file_path")
+            file_path = response.json().get("file_path")
+            if file_path:
+                return file_path, None
+            return None, create_error(
+                uploaded_file.name,
+                "Upload PDF",
+                "Backend trả về thành công nhưng thiếu file_path.",
+                response.status_code,
+            )
 
-        st.error(f"Không thể upload '{uploaded_file.name}': {response.text}")
+        return None, create_error(
+            uploaded_file.name,
+            "Upload PDF",
+            get_response_error(response),
+            response.status_code,
+        )
     except requests.exceptions.Timeout:
-        st.error(f"Upload '{uploaded_file.name}' bị quá thời gian. Hãy thử lại.")
+        return None, create_error(
+            uploaded_file.name,
+            "Upload PDF",
+            f"Upload vượt quá {UPLOAD_TIMEOUT_SECONDS} giây.",
+        )
     except requests.exceptions.RequestException as exc:
-        st.error(f"Không thể kết nối backend khi upload '{uploaded_file.name}': {exc}")
+        return None, create_error(
+            uploaded_file.name,
+            "Upload PDF",
+            f"Không thể kết nối backend: {exc}",
+        )
     except Exception as exc:
-        st.error(f"Lỗi khi upload '{uploaded_file.name}': {exc}")
-    return None
+        return None, create_error(
+            uploaded_file.name,
+            "Upload PDF",
+            f"Lỗi không xác định: {exc}",
+        )
 
 
 def get_processed_file_path(file_path):
+    filename = os.path.basename(file_path)
     try:
         response = requests.post(
             st.session_state.back_end_url + GET_STANDARD_WORD_API_URL,
@@ -153,20 +223,41 @@ def get_processed_file_path(file_path):
         if response.status_code == 200:
             result = response.json()
             if isinstance(result, str):
-                return result
-            return result.get("file_path")
+                return result, None
+            processed_path = result.get("file_path")
+            if processed_path:
+                return processed_path, None
+            return None, create_error(
+                filename,
+                "Xử lý backend/Gemini",
+                "Backend trả về thành công nhưng thiếu file_path.",
+                response.status_code,
+            )
 
-        st.error(f"Không thể xử lý '{file_path}': {response.text}")
+        return None, create_error(
+            filename,
+            "Xử lý backend/Gemini",
+            get_response_error(response),
+            response.status_code,
+        )
     except requests.exceptions.Timeout:
-        st.error(
-            f"Xử lý '{file_path}' vượt quá {PROCESS_TIMEOUT_SECONDS} giây. "
-            "Hãy thử một tài liệu ngắn hơn."
+        return None, create_error(
+            filename,
+            "Xử lý backend/Gemini",
+            f"Frontend đã chờ quá {PROCESS_TIMEOUT_SECONDS} giây mà chưa có kết quả.",
         )
     except requests.exceptions.RequestException as exc:
-        st.error(f"Không thể kết nối backend khi xử lý '{file_path}': {exc}")
+        return None, create_error(
+            filename,
+            "Xử lý backend/Gemini",
+            f"Không thể kết nối backend: {exc}",
+        )
     except Exception as exc:
-        st.error(f"Lỗi khi xử lý '{file_path}': {exc}")
-    return None
+        return None, create_error(
+            filename,
+            "Xử lý backend/Gemini",
+            f"Lỗi không xác định: {exc}",
+        )
 
 
 def fetch_file_from_backend(file_path):
@@ -182,16 +273,32 @@ def fetch_file_from_backend(file_path):
         )
 
         if response.status_code == 200:
-            return BytesIO(response.content)
+            return BytesIO(response.content), None
 
-        st.error(f"Không thể tải file '{filename}': HTTP {response.status_code}")
+        return None, create_error(
+            filename,
+            "Tải DOCX kết quả",
+            get_response_error(response),
+            response.status_code,
+        )
     except requests.exceptions.Timeout:
-        st.error(f"Tải file '{filename}' bị quá thời gian. Hãy thử lại.")
+        return None, create_error(
+            filename,
+            "Tải DOCX kết quả",
+            f"Tải file vượt quá {DOWNLOAD_TIMEOUT_SECONDS} giây.",
+        )
     except requests.exceptions.RequestException as exc:
-        st.error(f"Không thể kết nối backend khi tải file: {exc}")
+        return None, create_error(
+            filename or file_path,
+            "Tải DOCX kết quả",
+            f"Không thể kết nối backend: {exc}",
+        )
     except Exception as exc:
-        st.error(f"Lỗi khi tải file: {exc}")
-    return None
+        return None, create_error(
+            filename or file_path,
+            "Tải DOCX kết quả",
+            f"Lỗi không xác định: {exc}",
+        )
 
 
 def build_zip_archive(files):
@@ -222,6 +329,7 @@ def build_zip_archive(files):
 if st.session_state.upload_requested:
     files_to_upload = list(uploaded_files or [])
     uploaded_paths = []
+    operation_errors = []
 
     if files_to_upload:
         with status_container:
@@ -231,9 +339,13 @@ if st.session_state.upload_requested:
             ) as upload_status:
                 for uploaded_file in files_to_upload:
                     st.write(f"Đang tải: {uploaded_file.name}")
-                    uploaded_path = upload_file_to_backend(uploaded_file)
+                    uploaded_path, error = upload_file_to_backend(uploaded_file)
                     if uploaded_path:
                         uploaded_paths.append(uploaded_path)
+                        st.write(f"✅ Đã tải: {uploaded_file.name}")
+                    if error:
+                        operation_errors.append(error)
+                        show_current_error(error)
 
                 uploaded_count = len(uploaded_paths)
                 if uploaded_count == len(files_to_upload):
@@ -257,10 +369,14 @@ if st.session_state.upload_requested:
                     )
                     st.session_state.operation_message = (
                         "warning",
-                        f"Chỉ tải lên thành công {uploaded_count}/{len(files_to_upload)} file PDF.",
+                        (
+                            f"Chỉ tải lên thành công {uploaded_count}/"
+                            f"{len(files_to_upload)} file PDF. Xem lỗi từng file bên dưới."
+                        ),
                     )
 
     st.session_state.uploaded_paths = uploaded_paths
+    st.session_state.operation_errors = operation_errors
     st.session_state.upload_requested = False
     st.session_state.operation_in_progress = False
     st.rerun()
@@ -269,6 +385,7 @@ if st.session_state.process_requested:
     uploaded_paths = list(st.session_state.uploaded_paths)
     processed_paths = []
     fetched_files = []
+    operation_errors = []
 
     with status_container:
         with st.status(
@@ -277,18 +394,31 @@ if st.session_state.process_requested:
         ) as process_status:
             for path in uploaded_paths:
                 st.write(f"Đang phân tích cấu trúc: {os.path.basename(path)}")
-                processed_path = get_processed_file_path(path)
+                processed_path, error = get_processed_file_path(path)
                 if processed_path:
-                    processed_paths.append(processed_path)
+                    processed_paths.append((path, processed_path))
+                    st.write(f"✅ Backend đã xử lý: {os.path.basename(path)}")
+                if error:
+                    operation_errors.append(error)
+                    show_current_error(error)
 
-            for path in processed_paths:
-                st.write(f"Đang tải file kết quả: {os.path.basename(path)}")
-                fetched_file = fetch_file_from_backend(path)
+            for original_path, processed_path in processed_paths:
+                st.write(
+                    f"Đang tải file kết quả: {os.path.basename(processed_path)}"
+                )
+                fetched_file, error = fetch_file_from_backend(processed_path)
                 if fetched_file:
                     fetched_files.append((
                         fetched_file.getvalue(),
-                        os.path.basename(path),
+                        os.path.basename(processed_path),
                     ))
+                    st.write(
+                        f"✅ Đã nhận kết quả: {os.path.basename(processed_path)}"
+                    )
+                if error:
+                    error["filename"] = os.path.basename(original_path)
+                    operation_errors.append(error)
+                    show_current_error(error)
 
             completed_count = len(fetched_files)
             if completed_count == len(uploaded_paths):
@@ -312,10 +442,14 @@ if st.session_state.process_requested:
                 )
                 st.session_state.operation_message = (
                     "warning",
-                    f"Chỉ xử lý thành công {completed_count}/{len(uploaded_paths)} tài liệu.",
+                    (
+                        f"Chỉ xử lý thành công {completed_count}/"
+                        f"{len(uploaded_paths)} tài liệu. Xem lỗi từng file bên dưới."
+                    ),
                 )
 
     st.session_state.processed_files = fetched_files
+    st.session_state.operation_errors = operation_errors
     st.session_state.process_requested = False
     st.session_state.operation_in_progress = False
     st.rerun()

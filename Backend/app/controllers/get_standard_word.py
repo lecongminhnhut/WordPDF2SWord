@@ -1,6 +1,7 @@
 from flask_restful import Resource, reqparse
 from app.services.get_standard_word_service import GetStandardWordService
 from app.services.convert_pdf_to_word_service import PdfHasNoTextLayerError
+from app.services.gemini_service import GeminiRateLimitError
 
 GET_STANDARD_WORD_ROUTE = '/get-standard-word'
 
@@ -20,6 +21,8 @@ class GetStandardWord(Resource):
             return self.service.get_result(file_path)
         except PdfHasNoTextLayerError as exc:
             return {'message': str(exc)}, 422
+        except GeminiRateLimitError as exc:
+            return {'message': str(exc)}, 429
         except TimeoutError as exc:
             return {'message': str(exc)}, 504
         except Exception as exc:

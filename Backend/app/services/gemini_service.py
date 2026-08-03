@@ -1,7 +1,15 @@
 from docx import Document
 from app.main.settings import Config
 import google.generativeai as genai
-from google.api_core.exceptions import DeadlineExceeded, GoogleAPIError
+from google.api_core.exceptions import (
+    DeadlineExceeded,
+    GoogleAPIError,
+    ResourceExhausted,
+)
+
+
+class GeminiRateLimitError(RuntimeError):
+    """Raised when the active Gemini project quota is exhausted."""
 
 
 class GeminiPrompt:
@@ -92,6 +100,10 @@ class GeminiService:
         except DeadlineExceeded as exc:
             raise TimeoutError(
                 f"Gemini không phản hồi trong {self.request_timeout} giây."
+            ) from exc
+        except ResourceExhausted as exc:
+            raise GeminiRateLimitError(
+                f"Gemini đã vượt giới hạn quota: {exc}"
             ) from exc
         except GoogleAPIError as exc:
             raise RuntimeError(f"Không thể gọi Gemini: {exc}") from exc
