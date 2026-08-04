@@ -6,6 +6,7 @@ import re
 from app.services.convert_pdf_to_word_service import ConvertPdfToWordService
 from app.services.delete_footnote_service import DeleteFootnoteService
 from app.services.detect_heading_service import DetectHeadingService
+from app.services.gemini_service import GeminiRateLimitError
 from app.services.set_vietnamese_language_service import SetVietnameseService
 
 class PdfToStandardWordService:
@@ -16,6 +17,8 @@ class PdfToStandardWordService:
         self.set_vietnamese_service = SetVietnameseService()
 
     def convert_pdf_to_standardword(self, pdf_path, word_path=None):
+        warnings = []
+
         # Determine the Word file path if not provided
         if word_path is None:
             base_name = os.path.splitext(os.path.basename(pdf_path))[0]  # Get the file name without extension
@@ -27,10 +30,20 @@ class PdfToStandardWordService:
         # Remove only high-confidence rendered footnote/endnote blocks
         self.delete_footnote_service.remove_footnotes_precisely(word_path)
 
-        # Detect headings in the DOCX file
-        self.detect_heading_service.detect_heading(word_path)
+        # Detect headings when Gemini quota is available. Heading detection is
+        # optional; a quota error must not discard an otherwise valid DOCX.
+        try:
+            self.detect_heading_service.detect_heading(word_path)
+        except GeminiRateLimitError:
+            warnings.append({
+                'code': 'heading_detection_skipped_quota',
+                'message': (
+                    'Đã tạo file Word nhưng bỏ qua nhận diện Heading tự động '
+                    'do Gemini vượt giới hạn quota. Vui lòng chỉnh Heading thủ công.'
+                ),
+            })
 
         # Set the Vietnamese language for the DOCX file
         self.set_vietnamese_service.set_vietnamese_language(word_path)
 
-        return word_path
+        return word_path, warnings

@@ -1,12 +1,14 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import Mock
 
 from docx import Document
 from google.api_core.exceptions import ResourceExhausted
 
 from app.controllers.get_standard_word import GetStandardWord, PROCESSING_LOCK
 from app.services.gemini_service import GeminiRateLimitError, GeminiService
+from app.services.pdf_to_standardword_service import PdfToStandardWordService
 
 
 class QuotaExceededClient:
@@ -89,6 +91,31 @@ class GeminiErrorHandlingTest(unittest.TestCase):
         self.assertIn("unexpected failure", payload["message"])
         self.assertTrue(PROCESSING_LOCK.acquire(blocking=False))
         PROCESSING_LOCK.release()
+
+    def test_pipeline_returns_docx_when_heading_quota_is_exhausted(self):
+        service = PdfToStandardWordService.__new__(PdfToStandardWordService)
+        service.convert_pdf_to_word_service = Mock()
+        service.delete_footnote_service = Mock()
+        service.detect_heading_service = Mock()
+        service.detect_heading_service.detect_heading.side_effect = (
+            GeminiRateLimitError("quota exhausted")
+        )
+        service.set_vietnamese_service = Mock()
+
+        word_path, warnings = service.convert_pdf_to_standardword(
+            "input.pdf",
+            "output.docx",
+        )
+
+        self.assertEqual(word_path, "output.docx")
+        self.assertEqual(len(warnings), 1)
+        self.assertEqual(
+            warnings[0]["code"],
+            "heading_detection_skipped_quota",
+        )
+        service.set_vietnamese_service.set_vietnamese_language.assert_called_once_with(
+            "output.docx"
+        )
 
 
 if __name__ == "__main__":
