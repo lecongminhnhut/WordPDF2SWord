@@ -5,7 +5,7 @@ from pathlib import Path
 from docx import Document
 from google.api_core.exceptions import ResourceExhausted
 
-from app.controllers.get_standard_word import GetStandardWord
+from app.controllers.get_standard_word import GetStandardWord, PROCESSING_LOCK
 from app.services.gemini_service import GeminiRateLimitError, GeminiService
 
 
@@ -27,6 +27,11 @@ class StaticParser:
 class QuotaExceededService:
     def get_result(self, _file_path):
         raise GeminiRateLimitError("Gemini quota exhausted")
+
+
+class UnexpectedFailureService:
+    def get_result(self, _file_path):
+        raise RuntimeError("unexpected failure")
 
 
 class GeminiErrorHandlingTest(unittest.TestCase):
@@ -55,6 +60,35 @@ class GeminiErrorHandlingTest(unittest.TestCase):
 
         self.assertEqual(status_code, 429)
         self.assertIn("quota", payload["message"].casefold())
+        self.assertTrue(PROCESSING_LOCK.acquire(blocking=False))
+        PROCESSING_LOCK.release()
+
+    def test_controller_returns_http_503_while_backend_is_busy(self):
+        resource = GetStandardWord.__new__(GetStandardWord)
+        resource.parser = StaticParser()
+        resource.service = UnexpectedFailureService()
+
+        PROCESSING_LOCK.acquire()
+        try:
+            payload, status_code, headers = resource.post()
+        finally:
+            PROCESSING_LOCK.release()
+
+        self.assertEqual(status_code, 503)
+        self.assertEqual(headers["Retry-After"], "30")
+        self.assertIn("đang xử lý", payload["message"].casefold())
+
+    def test_controller_releases_lock_after_unexpected_error(self):
+        resource = GetStandardWord.__new__(GetStandardWord)
+        resource.parser = StaticParser()
+        resource.service = UnexpectedFailureService()
+
+        payload, status_code = resource.post()
+
+        self.assertEqual(status_code, 500)
+        self.assertIn("unexpected failure", payload["message"])
+        self.assertTrue(PROCESSING_LOCK.acquire(blocking=False))
+        PROCESSING_LOCK.release()
 
 
 if __name__ == "__main__":
