@@ -63,6 +63,7 @@ STATE_DEFAULTS = {
     "processed_files": [],
     "operation_message": None,
     "operation_errors": [],
+    "operation_warnings": [],
 }
 for state_key, default_value in STATE_DEFAULTS.items():
     if state_key not in st.session_state:
@@ -77,6 +78,7 @@ def request_upload():
     st.session_state.processed_files = []
     st.session_state.operation_message = None
     st.session_state.operation_errors = []
+    st.session_state.operation_warnings = []
 
 
 def request_processing():
@@ -85,6 +87,7 @@ def request_processing():
     st.session_state.processed_files = []
     st.session_state.operation_message = None
     st.session_state.operation_errors = []
+    st.session_state.operation_warnings = []
 
 
 is_busy = st.session_state.operation_in_progress
@@ -126,6 +129,18 @@ if st.session_state.operation_errors:
                 st.write(f"HTTP status: {error['status_code']}")
             st.code(error["message"], language=None)
 
+if st.session_state.operation_warnings:
+    st.warning(
+        f"Có {len(st.session_state.operation_warnings)} cảnh báo xử lý. "
+        "Các file vẫn sẵn sàng để tải xuống."
+    )
+    for warning in st.session_state.operation_warnings:
+        with st.expander(
+            f"⚠️ {warning['filename']} — {warning['stage']}",
+            expanded=True,
+        ):
+            st.write(warning["message"])
+
 
 def get_response_error(response):
     try:
@@ -146,6 +161,22 @@ def create_error(filename, stage, message, status_code=None):
         "stage": stage,
         "status_code": status_code,
         "message": str(message),
+    }
+
+
+def create_warning(filename, warning):
+    if isinstance(warning, dict):
+        message = warning.get("message") or str(warning)
+        code = warning.get("code")
+    else:
+        message = str(warning)
+        code = None
+
+    return {
+        "filename": os.path.basename(filename) or filename,
+        "stage": "Nhận diện Heading",
+        "code": code,
+        "message": message,
     }
 
 
@@ -223,41 +254,42 @@ def get_processed_file_path(file_path):
         if response.status_code == 200:
             result = response.json()
             if isinstance(result, str):
-                return result, None
+                return result, None, []
             processed_path = result.get("file_path")
+            warnings = result.get("warnings") or []
             if processed_path:
-                return processed_path, None
+                return processed_path, None, warnings
             return None, create_error(
                 filename,
                 "Xử lý backend/Gemini",
                 "Backend trả về thành công nhưng thiếu file_path.",
                 response.status_code,
-            )
+            ), []
 
         return None, create_error(
             filename,
             "Xử lý backend/Gemini",
             get_response_error(response),
             response.status_code,
-        )
+        ), []
     except requests.exceptions.Timeout:
         return None, create_error(
             filename,
             "Xử lý backend/Gemini",
             f"Frontend đã chờ quá {PROCESS_TIMEOUT_SECONDS} giây mà chưa có kết quả.",
-        )
+        ), []
     except requests.exceptions.RequestException as exc:
         return None, create_error(
             filename,
             "Xử lý backend/Gemini",
             f"Không thể kết nối backend: {exc}",
-        )
+        ), []
     except Exception as exc:
         return None, create_error(
             filename,
             "Xử lý backend/Gemini",
             f"Lỗi không xác định: {exc}",
-        )
+        ), []
 
 
 def fetch_file_from_backend(file_path):
@@ -386,6 +418,7 @@ if st.session_state.process_requested:
     processed_paths = []
     fetched_files = []
     operation_errors = []
+    operation_warnings = []
 
     with status_container:
         with st.status(
@@ -394,10 +427,17 @@ if st.session_state.process_requested:
         ) as process_status:
             for path in uploaded_paths:
                 st.write(f"Đang phân tích cấu trúc: {os.path.basename(path)}")
-                processed_path, error = get_processed_file_path(path)
+                processed_path, error, warnings = get_processed_file_path(path)
                 if processed_path:
                     processed_paths.append((path, processed_path))
                     st.write(f"✅ Backend đã xử lý: {os.path.basename(path)}")
+                    for warning in warnings:
+                        warning_record = create_warning(path, warning)
+                        operation_warnings.append(warning_record)
+                        st.write(
+                            f"⚠️ {warning_record['filename']}: "
+                            f"{warning_record['message']}"
+                        )
                 if error:
                     operation_errors.append(error)
                     show_current_error(error)
@@ -427,10 +467,22 @@ if st.session_state.process_requested:
                     state="complete",
                     expanded=False,
                 )
-                st.session_state.operation_message = (
-                    "success",
-                    f"Đã xử lý xong {completed_count} tài liệu. File đã sẵn sàng để tải xuống.",
-                )
+                if operation_warnings:
+                    st.session_state.operation_message = (
+                        "warning",
+                        (
+                            f"Đã tạo xong {completed_count} tài liệu; "
+                            f"{len(operation_warnings)} file bị bỏ qua Heading tự động."
+                        ),
+                    )
+                else:
+                    st.session_state.operation_message = (
+                        "success",
+                        (
+                            f"Đã xử lý xong {completed_count} tài liệu. "
+                            "File đã sẵn sàng để tải xuống."
+                        ),
+                    )
             else:
                 process_status.update(
                     label=(
@@ -450,6 +502,7 @@ if st.session_state.process_requested:
 
     st.session_state.processed_files = fetched_files
     st.session_state.operation_errors = operation_errors
+    st.session_state.operation_warnings = operation_warnings
     st.session_state.process_requested = False
     st.session_state.operation_in_progress = False
     st.rerun()
